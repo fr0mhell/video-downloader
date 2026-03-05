@@ -1,0 +1,36 @@
+services:
+  downloader:
+    build: .
+    volumes:
+      - ./downloads:/downloads
+      - ./cookies:/cookies:ro
+    environment:
+      - MCP_URL=http://playwright-mcp:3000
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - AGENT_MODEL=${AGENT_MODEL:-gpt-4o-mini}
+    depends_on:
+      playwright-mcp:
+        condition: service_healthy
+    # Override with actual URLs:
+    # docker compose run downloader https://example.com/video1 https://example.com/video2
+    command: ["--help"]
+
+  playwright-mcp:
+    image: node:20-slim
+    working_dir: /app
+    volumes:
+      - ./downloads:/downloads
+    environment:
+      - DISPLAY=:99
+    ports:
+      - "3000:3000"
+    command: >
+      sh -c "npx -y playwright install --with-deps firefox &&
+             npx -y @playwright/mcp@latest --browser firefox --host 0.0.0.0 --port 3000 --headless --no-sandbox --allowed-hosts '*'"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/mcp').then(() => process.exit(0)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
